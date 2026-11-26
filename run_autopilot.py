@@ -10,6 +10,8 @@ from pipeline.layers.youtube_delivery import upload_to_youtube_private
 NICHE = os.environ.get("CHANNEL_NICHE", "Dark Psychology & Stoicism")
 
 def run_factory():
+    os.makedirs('output', exist_ok=True)
+    os.makedirs('pipeline', exist_ok=True)
     print("="*65)
     print("🚀 STARTING DUAL-FORMAT YOUTUBE AUTOPILOT FACTORY")
     print("="*65)

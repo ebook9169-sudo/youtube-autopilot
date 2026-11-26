@@ -50,6 +50,7 @@ async def _edge_studio_tts(text: str, out_audio: str):
     return words
 
 def generate_voice_and_subs(text: str, prefix: str, aspect="16:9", prefer_elevenlabs=True):
+    os.makedirs("output", exist_ok=True)
     out_audio = f"output/{prefix}_voice.mp3"
     out_ass = f"output/{prefix}_subs.ass"
     words = []

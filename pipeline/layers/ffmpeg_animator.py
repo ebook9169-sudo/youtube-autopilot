@@ -1,6 +1,7 @@
 import subprocess, os, mutagen.mp3
 
 def render_master_video(image_paths: list, audio_path: str, ass_path: str, aspect="16:9", out_mp4="output/long_video_16x9.mp4") -> str:
+    os.makedirs("output", exist_ok=True)
     w, h = (1920, 1080) if aspect == "16:9" else (1080, 1920)
     scale_w = 2200 if aspect == "16:9" else 1250
     audio_len = max(6.0, mutagen.mp3.MP3(audio_path).info.length)
@@ -16,7 +17,7 @@ def render_master_video(image_paths: list, audio_path: str, ass_path: str, aspec
             f"eq=contrast=1.12:brightness=-0.03:saturation=1.15,vignette=PI/5,format=yuv420p"
         )
         subprocess.run([
-            "ffmpeg", "-y", "-loop", "1", "-i", img, "-vf", vf, "-t", str(per_scene),
+            "ffmpeg", "-y", "-i", img, "-vf", vf, "-t", str(per_scene),
             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "ultrafast", clip_out
         ], check=True)
         clip_files.append(clip_out)
