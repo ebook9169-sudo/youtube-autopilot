@@ -1,129 +1,241 @@
-import os, json
-from pipeline.key_rotator import get_keys, run_with_failover
+import os
+import json
+import random
+import requests
+from pipeline.key_rotator import rotator
 
-HISTORY_FILE = "pipeline/topic_history.json"
+VINSA_MASTER_PROMPT = """You are the 'Vinsa by Digital Dollars' Viral USA Faceless YouTube Storyboard Engine.
+Create a complete production blueprint in the viral USA Niche: "Do Not" / "What If" (1 Wrong Everyday Action -> 7 Survival Rules -> Chilling Psychological Final Twist) in Visual Style #5: CREEPY PICTOGRAM.
 
-def _builtin_creepy_pictogram_blueprint() -> dict:
-    """Exact 'Do Not / 7 Survival Rules' Creepy Pictogram Blueprint (USA Audience High-RPM)."""
-    scenes_long = [
-        {
-            "section": "THE ANOMALY",
-            "rule_badge": "ANOMALY DETECTED",
-            "visual_type": "chat_ui",
-            "caption_title": "5 MEMBERS IN FAMILY CHAT",
-            "pictogram_mode": "family_plus_red_entity",
-            "voice": "You scroll through your family group chat at 2:14 AM. Mom. Dad. Lily. You. And a fifth gray circle. No photo. No name. Below it in tiny letters, it just says: Added by... and then a blank space.",
-            "prompt": "Creepy minimalist pictogram style, dark gritty charcoal background, white stick figure family of 4 and a 5th glowing crimson red faceless figure standing behind them, analog horror warning sign, 8k"
-        },
-        {
-            "section": "THE 5-SECOND TEST",
-            "rule_badge": "VERIFICATION PROTOCOL",
-            "visual_type": "countdown",
-            "caption_title": "COUNT: 1 - 2 - 3 - 4 - 5",
-            "pictogram_mode": "phone_glitch",
-            "voice": "Do not tap the profile. Here is what you do right now. Close the app. Count to five. One. Two. Three. Four. Five. Open it again. If the fifth circle is still there, it is not a glitch. Glitches do not learn your family's routine.",
-            "prompt": "Creepy pictogram warning sign, white pictogram hand holding a smartphone with a glowing red skull icon on screen, dark VHS static background, analog horror style"
-        },
-        {
-            "section": "SURVIVAL RULE #1",
-            "rule_badge": "SURVIVAL RULE 01 / 07",
-            "visual_type": "rule_1",
-            "caption_title": "RULE #1: DO NOT LEAVE THE GROUP",
-            "pictogram_mode": "crossed_exit",
-            "voice": "It knows when Mom goes to sleep. It knows which stair creaks in your hallway. To survive the night, follow these rules carefully. Rule Number One: Do not leave the group chat. Leaving tells it that you noticed it.",
-            "prompt": "Creepy pictogram hazard sign, white pictogram figure trying to run through an exit door with a giant red X over it, tall dark shadow figure watching, gritty analog horror"
-        },
-        {
-            "section": "SURVIVAL RULE #2 & #3",
-            "rule_badge": "SURVIVAL RULE 02 & 03",
-            "visual_type": "rule_2",
-            "caption_title": "RULE #2: IGNORE THE TYPING BUBBLE",
-            "pictogram_mode": "typing_eyes",
-            "voice": "Rule Number Two: If you see three gray dots typing from the blank profile, lock your screen and place the phone face down. Rule Number Three: If your bedroom door is slightly open, do not look through the gap.",
-            "prompt": "Creepy pictogram style, white pictogram person lying in bed with phone face down, two glowing red eyes peeking through a slightly open bedroom door, dark VHS horror"
-        },
-        {
-            "section": "SURVIVAL RULE #4 & #5",
-            "rule_badge": "SURVIVAL RULE 04 & 05",
-            "visual_type": "rule_4",
-            "caption_title": "RULE #4: VERIFY VOICE CALLS",
-            "pictogram_mode": "mimic_call",
-            "voice": "Rule Number Four: If Mom or Dad texts you asking you to come downstairs, check their spelling. It copies their words, but it never uses punctuation. Rule Number Five: Keep your hallway light off until 6:00 AM.",
-            "prompt": "Creepy pictogram warning card, white pictogram figure at top of stairs, red distorted double figure at bottom of stairs waving, analog emergency broadcast aesthetic"
-        },
-        {
-            "section": "THE FINAL TWIST",
-            "rule_badge": "CRITICAL WARNING // TWIST",
-            "visual_type": "final_twist",
-            "caption_title": "WHO IS THE 5TH MEMBER?",
-            "pictogram_mode": "twist_reveal",
-            "voice": "And finally, Rule Number Seven: Your phone is not broken. Phones do not miscount people in a house. Someone in your house gave it a fifth spot. And whoever it is... they have been reading along behind your shoulder this whole time.",
-            "prompt": "Creepy pictogram final twist, white pictogram figure looking at glowing phone screen while a giant red pictogram shadow looms directly over their shoulder reading the screen, analog horror"
-        }
-    ]
+Return ONLY valid JSON matching this exact structure:
+{
+  "selected_idea": "Idea title",
+  "title": "DO NOT [Action] At 3:00 AM (7 Rules To Survive)",
+  "thumbnail_text": "DO NOT ANSWER IT",
+  "seo_description": "Full SEO description with hashtags #creepy #rules #whatif #survivalrules",
+  "tags": ["do not", "7 rules to survive", "creepy pictogram", "what if", "analog horror", "scary rules"],
+  "publishing_package": {
+    "title_ideas": ["10 high-CTR viral titles..."],
+    "thumbnail_prompts": ["10 creepy pictogram thumbnail prompts..."]
+  },
+  "block_a_assets": {
+    "style_lock": "Style #5 Creepy Pictogram, minimalist 2D stark white chalk stick-figure pictogram on dark gritty charcoal analog horror background, blood-red hazard accents, high contrast, no text",
+    "main_character": "White minimalist stick-figure pictogram person with wide startled hollow eyes",
+    "anomaly_entity": "Tall distorted dark-red pictogram figure with glowing white pinhole eyes and elongated limbs",
+    "location": "Dark minimalist suburban house interior with white wireframe walls and dim red doorway",
+    "key_prop": "Glowing smartphone screen showing a group chat interface with 5 circular icons"
+  },
+  "voiceover_parts": [
+    "Part 1 (Hook): ...",
+    "Part 2 (Escalation): ...",
+    "Part 3 (Rules 1 to 4): ...",
+    "Part 4 (Rules 5 to 7): ...",
+    "Part 5 (The Final Twist): ..."
+  ],
+  "scenes": [
+    {
+      "scene_id": 1,
+      "part_index": 0,
+      "rule_badge": "THE MISTAKE",
+      "narration": "Spoken narration for this scene...",
+      "subtitle_caption": "SHORT PUNCHY CAPTION",
+      "block_b_visual_prompt": "Scene 1 visual description referencing main_character, key_prop, and location",
+      "block_c_motion": "zoom_in_slow",
+      "sfx_cue": "phone_buzz",
+      "scene_archetype": "phone_chat_5th"
+    }
+  ]
+}
+Provide exactly 10 scenes covering the Hook, Escalation, all 7 Survival Rules, and the Final Twist."""
 
-    scenes_short = [
-        scenes_long[0],
-        scenes_long[1],
-        scenes_long[2],
-        scenes_long[5]
-    ]
+def _parse_json_safely(raw_text: str):
+    cleaned = raw_text.replace("```json", "").replace("```", "").strip()
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start != -1 and end != -1:
+        return json.loads(cleaned[start:end+1])
+    raise ValueError("No valid JSON object found")
 
+def generate_pro_storyboard(video_format="16:9") -> dict:
+    custom_topic = os.environ.get("NICHE_OVERRIDE", "").strip()
+    prompt = VINSA_MASTER_PROMPT
+    if custom_topic:
+        prompt += f"\nBase the story on this specific trigger: {custom_topic}"
+
+    # 1. Try Free Gemini API (GEMINI_KEY_1 / GEMINI_KEY_2)
+    gemini_key = rotator.get_key("GEMINI_KEY")
+    if gemini_key:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_key}"
+            resp = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=35)
+            if resp.status_code == 200:
+                raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+                data = _parse_json_safely(raw)
+                if len(data.get("scenes", [])) >= 6:
+                    print("[Brain] Generated fresh Vinsa Storyboard via Gemini Free API!")
+                    return data
+        except Exception as e:
+            print(f"[Brain] Gemini API fallback triggered: {e}")
+
+    # 2. Try Free Groq API (MoneyPrinterTurbo's fast free LLM: GROQ_KEY_1 / GROQ_KEY_2)
+    groq_key = rotator.get_key("GROQ_KEY")
+    if groq_key:
+        try:
+            resp = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                json={
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.7
+                },
+                timeout=30
+            )
+            if resp.status_code == 200:
+                raw = resp.json()["choices"][0]["message"]["content"]
+                data = _parse_json_safely(raw)
+                if len(data.get("scenes", [])) >= 6:
+                    print("[Brain] Generated fresh Vinsa Storyboard via Groq Free API!")
+                    return data
+        except Exception as e:
+            print(f"[Brain] Groq API fallback triggered: {e}")
+
+    # 3. Try MoneyPrinterTurbo's 100% Keyless Pollinations Text API
+    try:
+        resp = requests.post(
+            "https://text.pollinations.ai/",
+            json={
+                "messages": [{"role": "user", "content": prompt}],
+                "model": "openai",
+                "jsonMode": True
+            },
+            timeout=25
+        )
+        if resp.status_code == 200 and "scenes" in resp.text:
+            data = _parse_json_safely(resp.text)
+            if len(data.get("scenes", [])) >= 6:
+                print("[Brain] Generated fresh Vinsa Storyboard via Keyless Pollinations AI!")
+                return data
+    except Exception as e:
+        print(f"[Brain] Keyless LLM fallback triggered: {e}")
+
+    # 4. Guaranteed Master Storyboard (Exact Reference Video Story: 5th Blank Member in Family Group Chat)
+    print("[Brain] Using Master Reference Storyboard (5th Member in Family Chat - 7 Rules + Twist)")
     return {
-        "topic": "If You See a 5th Blank Profile in Your Family Chat, Follow These 7 Rules",
-        "style": "Style #5: Creepy Pictogram (USA Viral Niche)",
-        "monetization_safe": True,
-        "copyright_safe": True,
-        "algorithm_score": 99,
+        "selected_idea": "5th Blank Member in Family Group Chat (Outlier Score: 98/100)",
+        "title": "DO NOT Delete The 5th Member In Your Family Group Chat (7 Survival Rules)",
+        "thumbnail_text": "WHO ADDED NUMBER 5?",
+        "seo_description": "You are scrolling through your family group chat late at night. Mom, Dad, Lily, You... and a 5th blank gray icon that says Added by Nobody. Follow these 7 Survival Rules immediately.\n\n#donot #survivalrules #creepy #whatif #analoghorror #scarystories",
+        "tags": ["do not", "7 rules to survive", "what if", "creepy pictogram", "family group chat horror", "analog horror rules"],
         "publishing_package": {
             "title_ideas": [
-                "If Your Family Group Chat Has a 5th Blank Member, DO NOT Text Back",
-                "7 Survival Rules If an Unknown Profile Joins Your Family Chat at 3 AM",
-                "DO NOT Delete the 5th Member in Your Family Group Chat (7 Rules)"
+                "DO NOT Delete The 5th Member In Your Family Group Chat (7 Rules)",
+                "If A Blank Profile Joins Your Family Chat At 3AM, Follow These 7 Rules",
+                "7 Rules To Survive When Your Phone Counts 5 People In A House Of 4",
+                "DO NOT Check Who Added The 5th Member To Your Group Chat",
+                "What If An Unnamed Account Starts Typing In Your Family Chat?",
+                "NEVER Screenshot The 5th Member In Your Family Group Chat",
+                "7 Survival Rules When Someone In Your House Isn't Who They Say They Are",
+                "DO NOT Look Up When The 5th Group Chat Member Starts Typing",
+                "Your Phone Isn't Broken: 7 Rules For The Extra Person In Your Chat",
+                "If Your Family Chat Shows 5 Members Instead Of 4, Do This Immediately"
+            ],
+            "thumbnail_prompts": [
+                "Creepy pictogram style: 4 white stick figures and 1 glowing blood-red figure inside a smartphone chat screen, bold text WHO ADDED #5?",
+                "Creepy pictogram style: Stick figure in bed looking at glowing red phone icon showing '5 Members', dark red eyes in bedroom doorway"
             ]
         },
-        "long_video": {
-            "title": "If Your Family Chat Has a 5th Blank Member, DO NOT Text Back (7 Rules)",
-            "description": "What if you see a 5th unnamed profile in your family group chat? Follow these survival rules carefully.\n\n00:00 The 5th Member Anomaly\n00:18 The 5-Second Verification Test\n00:35 Survival Rules #1 to #5\n01:10 The Final Twist\n\n#donot #whatif #survivalrules #creepy #analoghorror",
-            "tags": ["do not", "what if", "7 survival rules", "creepy pictogram", "analog horror", "scary rules", "storytime"],
-            "thumbnail_text": "DO NOT TEXT BACK",
-            "scenes": scenes_long
+        "block_a_assets": {
+            "style_lock": "minimalist 2D creepy pictogram illustration, stark white stick-figure silhouette on dark gritty charcoal analog horror background, blood-red hazard accents, VHS grain, no watermark",
+            "main_character": "white minimalist stick-figure person with wide panicked hollow eyes",
+            "anomaly_entity": "distorted crimson-red shadow pictogram figure with glowing white pinhole eyes",
+            "location": "dark minimalist two-story house wireframe with dimly lit hallway and creaking staircase",
+            "key_prop": "glowing smartphone screen displaying 4 white user icons and a 5th nameless blood-red icon"
         },
-        "short_video": {
-            "title": "If You See a 5th Blank Profile in Your Family Chat... #Shorts",
-            "description": "Never leave the group chat. Watch the full 7 Survival Rules on our channel! #shorts #donot #whatif #creepy #rules",
-            "tags": ["shorts", "donot", "whatif", "survivalrules", "creepy"],
-            "scenes": scenes_short
-        }
+        "voiceover_parts": [
+            "You are scrolling through your family group chat late at night. Mom. Dad. Your sister Lily. And you. Four people. Except at the top of the screen, it says five members. Right below your name is a blank gray circle with no photo and no name. Just the words: Added by blank.",
+            "You close the app and count on your fingers. One. Two. Three. Four. Five. You restart your phone, but the fifth profile is still there. It is not a glitch. It has been silently reading every message, learning when your mom falls asleep, and which stair creaks in the hallway. If you want to survive the night, follow these seven rules.",
+            "Rule Number One: Do not try to remove the fifth member. The moment your thumb presses remove, every locked door in your house will unlatch at once. Rule Number Two: Mute your phone immediately. If the fifth profile sends an audio file, do not press play. It is a recording of your own voice asking for help from inside your closet. Rule Number Three: Text the group chat saying Goodnight, I am going to sleep now, and place your phone face down. It needs to believe you are unaware.",
+            "Rule Number Four: If you hear footsteps stop outside your bedroom door, do not check the hallway peephole. Watch the group chat typing indicator instead. Rule Number Five: If the blank profile says typing, hold your breath and count to seven. It is testing which room echoes. Rule Number Six: Do not call your parents on the phone. Whoever answers will use your mother's exact voice to tell you to open the door. Rule Number Seven: Stay under your blanket until 6:00 AM, and never look at the ceiling corner.",
+            "If you survive until sunrise, the group chat will go back to four members. Everything will feel normal again. Except for one final truth. Your phone was never broken. Phones do not miscount. Someone inside your house manually typed in a fifth slot. And whoever it is has been sitting at your dinner table for a very long time."
+        ],
+        "scenes": [
+            {
+                "scene_id": 1,
+                "part_index": 0,
+                "rule_badge": "THE MISTAKE",
+                "narration": "You are scrolling through your family group chat late at night. Mom, Dad, Lily, and you. Four people. Except at the top of the screen, it says five members. A blank gray circle with no name.",
+                "subtitle_caption": "5 MEMBERS IN A FAMILY OF 4...",
+                "block_b_visual_prompt": "close up of glowing smartphone screen held by white pictogram hands, showing 4 white family profile icons and a 5th glowing blood-red nameless icon",
+                "block_c_motion": "zoom_in_slow",
+                "sfx_cue": "phone_buzz",
+                "scene_archetype": "phone_chat_5th"
+            },
+            {
+                "scene_id": 2,
+                "part_index": 1,
+                "rule_badge": "1.. 2.. 3.. 4.. 5",
+                "narration": "You close the app and count on your fingers. One, two, three, four, five. You restart your phone, but the fifth member is still there. It is learning when your family sleeps.",
+                "subtitle_caption": "IT IS NOT A PHONE GLITCH",
+                "block_b_visual_prompt": "four white stick figure family members in separate rooms of a dark house cross-section while a fifth red shadow figure stands on the stairs",
+                "block_c_motion": "zoom_out_slow",
+                "sfx_cue": "static_glitch",
+                "scene_archetype": "counting_five"
+            },
+            {
+                "scene_id": 3,
+                "part_index": 2,
+                "rule_badge": "RULE #1",
+                "narration": "Rule Number One: Do not try to delete or remove the fifth member. The moment your thumb presses remove, every locked door in your house will unlatch at once.",
+                "subtitle_caption": "RULE #1: DO NOT REMOVE IT",
+                "block_b_visual_prompt": "white pictogram hand hovering over a red REMOVE button on phone screen with a giant red X hazard cross and unlocking door icon",
+                "block_c_motion": "zoom_in_slow",
+                "sfx_cue": "deep_boom",
+                "scene_archetype": "do_not_delete"
+            },
+            {
+                "scene_id": 4,
+                "part_index": 2,
+                "rule_badge": "RULE #2 & #3",
+                "narration": "Rule Number Two: Mute your phone immediately. Never play its audio message. Rule Number Three: Text the chat saying you are going to sleep, and place your phone face down.",
+                "subtitle_caption": "RULE #2 & #3: MUTE & PLACE FACE DOWN",
+                "block_b_visual_prompt": "white stick figure in bed placing glowing smartphone face down on nightstand while a red soundwave emanates from bedroom closet door",
+                "block_c_motion": "zoom_out_slow",
+                "sfx_cue": "phone_buzz",
+                "scene_archetype": "phone_face_down"
+            },
+            {
+                "scene_id": 5,
+                "part_index": 3,
+                "rule_badge": "RULE #4 & #5",
+                "narration": "Rule Number Four: If footsteps stop outside your door, do not look outside. Rule Number Five: When the blank profile says typing, hold your breath and count to seven.",
+                "subtitle_caption": "RULE #4 & #5: HOLD YOUR BREATH",
+                "block_b_visual_prompt": "dark bedroom door cracked open with two glowing red eyes peeking through the gap while a white stick figure covers its mouth in bed",
+                "block_c_motion": "zoom_in_slow",
+                "sfx_cue": "deep_boom",
+                "scene_archetype": "doorway_eyes"
+            },
+            {
+                "scene_id": 6,
+                "part_index": 3,
+                "rule_badge": "RULE #6 & #7",
+                "narration": "Rule Number Six: Do not answer calls from your parents' numbers. It is mimicking their voice. Rule Number Seven: Stay under your blanket until 6:00 AM and never look at the ceiling.",
+                "subtitle_caption": "RULE #6 & #7: DO NOT LOOK UP",
+                "block_b_visual_prompt": "white stick figure hiding under blanket in bed while a distorted red pictogram figure clings upside down to the dark bedroom ceiling corner",
+                "block_c_motion": "zoom_out_slow",
+                "sfx_cue": "static_glitch",
+                "scene_archetype": "family_house"
+            },
+            {
+                "scene_id": 7,
+                "part_index": 4,
+                "rule_badge": "THE FINAL TWIST",
+                "narration": "Here is the final truth. Your phone was never broken. Phones do not miscount. Someone inside your own house manually added a fifth name. And they have been reading along the whole time.",
+                "subtitle_caption": "PHONES DO NOT MISCOUNT...",
+                "block_b_visual_prompt": "4 white family stick figures sitting around a dinner table, one family member casting a monstrous blood-red shadow holding a phone behind their back",
+                "block_c_motion": "zoom_in_slow",
+                "sfx_cue": "heartbeat",
+                "scene_archetype": "final_twist_table"
+            }
+        ]
     }
-
-def _gemini_vinsa_blueprint(api_key: str, history: list) -> dict:
-    import google.generativeai as genai
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
-    prompt = f'''
-    You are the "Vinsa Master Skill" Showrunner for the viral USA "DO NOT / WHAT IF / 7 SURVIVAL RULES" niche in Style #5: CREEPY PICTOGRAM.
-    Past topics (DO NOT REPEAT): {history[-30:]}.
-    Create a brand-new, chilling, 100% Advertiser-Friendly (no gore/profanity, pure psychological uncanny suspense) story where an everyday object/app/place has a creepy anomaly, followed by Survival Rules and a mind-blowing Final Twist.
-    Return ONLY valid JSON matching the exact schema of _builtin_creepy_pictogram_blueprint() with 6 scenes in long_video.scenes and 4 scenes in short_video.scenes.
-    Each scene must have: "section", "rule_badge", "visual_type", "caption_title", "pictogram_mode", "voice" (25-35 words spoken second-person 'You'), and "prompt" (Creepy minimalist white & red pictogram on dark gritty analog horror background).
-    '''
-    raw = model.generate_content(prompt).text.strip().replace("```json", "").replace("```", "").strip()
-    return json.loads(raw)
-
-def generate_verified_blueprint(niche: str = "Do Not / 7 Survival Rules") -> dict:
-    os.makedirs("pipeline", exist_ok=True)
-    history = json.load(open(HISTORY_FILE)) if os.path.exists(HISTORY_FILE) else []
-    if get_keys("GEMINI_KEY"):
-        try:
-            data = run_with_failover("GEMINI_KEY", _gemini_vinsa_blueprint, history)
-        except Exception as e:
-            print(f"ℹ️ Gemini fallback to Vinsa Master Blueprint ({e})")
-            data = _builtin_creepy_pictogram_blueprint()
-    else:
-        print("ℹ️ [Vinsa Master Skill] Using Built-in Viral '5th Member in Family Chat' Creepy Pictogram Blueprint!")
-        data = _builtin_creepy_pictogram_blueprint()
-
-    history.append(data["topic"])
-    json.dump(history, open(HISTORY_FILE, "w"), indent=2)
-    return data
