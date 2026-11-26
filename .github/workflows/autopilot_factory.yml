@@ -23,7 +23,7 @@ jobs:
       - name: 2. Install FFmpeg Cinema Engine & Dependencies
         run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg libass-dev fonts-liberation
-          pip install edge-tts requests mutagen google-generativeai google-api-python-client google-auth-oauthlib
+          pip install edge-tts gTTS Pillow requests mutagen google-generativeai google-api-python-client google-auth-oauthlib
 
       - name: 3. Run Priority Factory (16:9 Long Video + 9:16 Short + Audit)
         env:
