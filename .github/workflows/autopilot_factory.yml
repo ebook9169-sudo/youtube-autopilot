@@ -1,0 +1,55 @@
+name: 24x7 Autonomous YouTube Factory (GitHub Cloud Server)
+
+on:
+  schedule:
+    - cron: '0 13 * * 2,4,6'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run-youtube-factory:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Checkout Feature Branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/pro-autopilot
+
+      - name: 2. Install FFmpeg Cinema Engine & Dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg libass-dev fonts-liberation
+          pip install edge-tts requests mutagen google-generativeai google-api-python-client google-auth-oauthlib
+
+      - name: 3. Run Priority Factory (16:9 Long Video + 9:16 Short + Audit)
+        env:
+          CHANNEL_NICHE: "Dark Psychology & Stoicism"
+          GEMINI_KEY_1: ${{ secrets.GEMINI_KEY_1 }}
+          GEMINI_KEY_2: ${{ secrets.GEMINI_KEY_2 }}
+          ELEVENLABS_KEY_1: ${{ secrets.ELEVENLABS_KEY_1 }}
+          ELEVENLABS_KEY_2: ${{ secrets.ELEVENLABS_KEY_2 }}
+          GROQ_KEY_1: ${{ secrets.GROQ_KEY_1 }}
+          GROQ_KEY_2: ${{ secrets.GROQ_KEY_2 }}
+          HF_TOKEN_1: ${{ secrets.HF_TOKEN_1 }}
+          HF_TOKEN_2: ${{ secrets.HF_TOKEN_2 }}
+          YT_TOKEN_JSON: ${{ secrets.YT_TOKEN_JSON }}
+        run: python run_autopilot.py
+
+      - name: 4. Save Generated Videos & Audit Report for Review
+        uses: actions/upload-artifact@v4
+        with:
+          name: youtube-studio-package
+          path: |
+            output/long_video_16x9.mp4
+            output/short_video_9x16.mp4
+            output/thumbnail_16x9.jpg
+            output/audit_report.json
+
+      - name: 5. Auto-Save Topic History
+        run: |
+          git config user.name "youtube-autopilot-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add pipeline/topic_history.json
+          git diff --staged --quiet || git commit -m "Auto-updated topic history"
+          git push origin HEAD:feature/pro-autopilot
