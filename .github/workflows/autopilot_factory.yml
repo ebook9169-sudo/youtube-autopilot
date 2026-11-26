@@ -1,6 +1,9 @@
 name: 24x7 Autonomous YouTube Factory (GitHub Cloud Server)
 
 on:
+  push:
+    branches:
+      - feature/pro-autopilot
   schedule:
     - cron: '0 13 * * 2,4,6'
   workflow_dispatch:
