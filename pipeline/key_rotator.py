@@ -1,23 +1,24 @@
 import os
 
-def get_keys(prefix: str) -> list:
-    keys = []
-    for suffix in ["_1", "_2", ""]:
-        val = os.environ.get(f"{prefix}{suffix}", "").strip()
-        if val and val not in keys:
-            keys.append(val)
-    return keys
+class DualAccountKeyRotator:
+    def __init__(self):
+        self.counters = {}
 
-def run_with_failover(prefix: str, func, *args, **kwargs):
-    keys = get_keys(prefix)
-    if not keys:
-        raise RuntimeError(f"No keys for {prefix}")
-    last_err = None
-    for idx, key in enumerate(keys, start=1):
-        try:
-            print(f"🔑 [{prefix}] Using Account #{idx}...")
-            return func(key, *args, **kwargs)
-        except Exception as e:
-            print(f"⚠️ [{prefix}] Account #{idx} limit reached ({e}). Switching to Account #2...")
-            last_err = e
-    raise RuntimeError(f"All accounts exhausted: {last_err}")
+    def get_key(self, prefix: str) -> str:
+        k1 = os.environ.get(f"{prefix}_1", "").strip()
+        k2 = os.environ.get(f"{prefix}_2", "").strip()
+        single = os.environ.get(prefix, "").strip()
+
+        valid_keys = [k for k in [k1, k2, single] if k and not k.startswith("YOUR_")]
+        if not valid_keys:
+            return ""
+
+        idx = self.counters.get(prefix, 0)
+        chosen = valid_keys[idx % len(valid_keys)]
+        self.counters[prefix] = idx + 1
+        return chosen
+
+rotator = DualAccountKeyRotator()
+
+def get_rotated_key(prefix: str) -> str:
+    return rotator.get_key(prefix)
