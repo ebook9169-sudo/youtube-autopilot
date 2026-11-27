@@ -14,12 +14,11 @@ def check_connected_keys() -> dict:
         "HF_TOKEN": bool(rotator.get_key("HF_TOKEN")),
         "GROQ_KEY": bool(rotator.get_key("GROQ_KEY")),
         "ELEVENLABS_KEY": bool(rotator.get_key("ELEVENLABS_KEY")),
-        "PEXELS_KEY": bool(rotator.get_key("PEXELS_KEY")),
     }
     print("-----------------------------------------------------------------")
     print("🔑 API KEYS CONNECTION STATUS:")
     for k, is_set in status.items():
-        badge = "✅ CONNECTED (Real AI Active)" if is_set else "⚪ NOT SET (Using Free Fallback)"
+        badge = "✅ CONNECTED (Real AI Active)" if is_set else "⚪ NOT SET"
         print(f"   • {k}: {badge}")
     print("-----------------------------------------------------------------")
     return status
@@ -51,17 +50,17 @@ def verify_video_stream(mp4_path: str) -> dict:
 def main():
     os.makedirs("output", exist_ok=True)
     print("=================================================================")
-    print("🚀 STARTING VINSA 'DO NOT / 7 SURVIVAL RULES' AI FACTORY (WITH KEYS)")
+    print("🚀 STARTING @LULLORIN & @NIGHTORAVIDEOS STYLE AI FACTORY")
     print("=================================================================")
 
     key_status = check_connected_keys()
 
-    # 1. Generate Fresh Viral Storyboard via Gemini / Groq AI
+    # 1. Generate 100% NEW Storyboard (14 Rapid Scenes)
     long_story = generate_pro_storyboard(video_format="16:9")
-    print(f"[1/5] Fresh AI Storyboard Ready: {long_story.get('title')}")
+    print(f"[1/5] Brand New Storyboard Ready: {long_story.get('title')}")
 
-    # 2. Priority #1: 16:9 Long-Form Video (ElevenLabs + HuggingFace FLUX)
-    print("[2/5] Producing Priority #1: 16:9 Long-Form Creepy Pictogram Video...")
+    # 2. Priority #1: 16:9 Long-Form Video + Real AI Thumbnail
+    print("[2/5] Producing 16:9 Long-Form Video & AI Thumbnail...")
     long_audio, long_dur = generate_voiceover(long_story["scenes"], "output/long_16x9_voice.mp3")
     fetch_visual_scenes(long_story, orientation="16:9")
     long_mp4 = render_master_video(
@@ -71,18 +70,15 @@ def main():
         "output/long_video_16x9.mp4",
         orientation="16:9"
     )
-    thumb_jpg = generate_viral_thumbnail(
-        long_story.get("thumbnail_text", "DO NOT BREAK RULE #1"),
-        "output/thumbnail_16x9.jpg"
-    )
-    print(f"✅ Long Video & Thumbnail Ready: {long_mp4} ({long_dur:.1f}s)")
+    thumb_jpg = generate_viral_thumbnail(long_story, "output/thumbnail_16x9.jpg")
+    print(f"✅ Long Video & AI Thumbnail Ready: {long_mp4} ({long_dur:.1f}s)")
 
-    # 3. Priority #2: 9:16 Viral YouTube Short
-    print("[3/5] Producing Priority #2: 9:16 Viral YouTube Short...")
+    # 3. Priority #2: 9:16 Viral YouTube Short (6 Fast-Paced Scenes)
+    print("[3/5] Producing 9:16 Viral YouTube Short...")
     short_story = copy.deepcopy(long_story)
     all_scenes = short_story.get("scenes", [])
-    if len(all_scenes) > 4:
-        short_story["scenes"] = [all_scenes[0], all_scenes[2], all_scenes[4], all_scenes[-1]]
+    if len(all_scenes) > 6:
+        short_story["scenes"] = [all_scenes[0], all_scenes[1], all_scenes[3], all_scenes[6], all_scenes[10], all_scenes[-1]]
     short_audio, short_dur = generate_voiceover(short_story["scenes"], "output/short_9x16_voice.mp3")
     fetch_visual_scenes(short_story, orientation="9:16")
     short_mp4 = render_master_video(
@@ -94,12 +90,10 @@ def main():
     )
     print(f"✅ Viral Short Ready: {short_mp4} ({short_dur:.1f}s)")
 
-    # 4. Save Vinsa Publishing Package (10 Titles + SEO Description + 10 Thumbnail Prompts)
+    # 4. Save Publishing Package
     pub = long_story.get("publishing_package", {})
     with open("output/publishing_package.txt", "w", encoding="utf-8") as pf:
-        pf.write("=== API KEYS DETECTED ===\n")
-        pf.write(json.dumps(key_status, indent=2) + "\n\n")
-        pf.write("=== SELECTED STORY ===\n")
+        pf.write("=== SELECTED ORIGINAL STORY ===\n")
         pf.write(f"{long_story.get('title')}\n\n")
         pf.write("=== 10 VIRAL TITLE IDEAS ===\n")
         for idx, t in enumerate(pub.get("title_ideas", []), 1):
@@ -108,18 +102,13 @@ def main():
         pf.write(long_story.get("seo_description", "") + "\n")
         pf.write("\n=== TAGS ===\n")
         pf.write(", ".join(long_story.get("tags", [])) + "\n")
-        pf.write("\n=== 10 THUMBNAIL PROMPTS ===\n")
-        for idx, tp in enumerate(pub.get("thumbnail_prompts", []), 1):
-            pf.write(f"{idx}. {tp}\n")
 
-    # 5. Automated Quality, Copyright & Monetization Audit Report
+    # 5. Audit Report
     audit = {
-        "niche": "USA 'Do Not / What If' - 7 Survival Rules + Final Twist",
-        "visual_style": "Style #5: Creepy Pictogram (AI FLUX + HUD)",
+        "style_reference": "@Lullorin / @Nightsill-u2n / @NightoraVideos",
         "api_keys_connected": key_status,
         "title": long_story.get("title"),
-        "copyright_safe": True,
-        "monetization_safe": True,
+        "scenes_count": len(long_story.get("scenes", [])),
         "long_video_16x9": verify_video_stream(long_mp4),
         "short_video_9x16": verify_video_stream(short_mp4),
         "thumbnail": thumb_jpg
@@ -127,7 +116,7 @@ def main():
     with open("output/audit_report.json", "w", encoding="utf-8") as af:
         json.dump(audit, af, indent=2)
 
-    print("🎉 ALL AI LAYERS COMPLETED SUCCESSFULLY!")
+    print("🎉 COMPLETED! Download youtube-studio-package to view the new @Lullorin style output!")
 
 if __name__ == "__main__":
     main()
