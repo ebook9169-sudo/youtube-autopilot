@@ -372,6 +372,124 @@ def generate_original_story() -> Dict[str, Any]:
 
 
 # ==============================================================================
+# 1B. SEPARATE SHORTS STORY (never reuses the long video script)
+# ==============================================================================
+SHORT_PREMISES = [
+    "a text message arrives from your own phone number while you are lying in bed",
+    "someone knocks back from the other side of a bedroom wall where nobody sleeps",
+    "footsteps climb the stairs every night but always stop one step before the top",
+    "your dog refuses to walk past one closed door in the hallway after midnight",
+    "a family member calls goodnight from a room you know is empty",
+    "the light under your bedroom door switches on although you live alone",
+]
+
+
+def _short_fallback(title: str, rule: str, scenes: List[Tuple[str, str, str, Dict[str, Any]]]) -> Dict[str, Any]:
+    built = []
+    for i, (stype, sfx, narration, params) in enumerate(scenes):
+        built.append({"id": i + 1, "type": stype, "hud": "RULE 1" if stype == "RULE_CARD" else "SHORT",
+                      "dur": 3.0, "sfx": sfx, "narration": narration, "params": params})
+    return {
+        "title": f"{title} #shorts",
+        "description": f"{rule.title()}. #shorts #scarystories #ruleshorror #animatedhorror",
+        "scenes": built,
+    }
+
+
+SHORT_FALLBACKS = [
+    _short_fallback("If You Get A Text From Your Own Number", "never reply to yourself", [
+        ("PHONE_SCREEN", "phone_buzz", "Your phone buzzes at two in the morning. The message is from your own number.",
+         {"sender": "You", "msg": "Are you still in bed?", "time": "2:03 AM"}),
+        ("BEDROOM_WIDE", "heartbeat", "You are in bed, and the phone has been in your hand all night.", {"child_state": "head_up"}),
+        ("RULE_CARD", "sub_drop", "Rule one. Never reply to yourself.", {"rule": 1, "title": "NEVER REPLY TO YOURSELF"}),
+        ("PHONE_SCREEN", "phone_buzz", "Another message appears. It says it can see you reading.",
+         {"sender": "You", "msg": "I can see you reading this.", "time": "2:04 AM", "sub_green": "DO NOT TYPE"}),
+        ("BEDROOM_WIDE", "knock", "Then someone knocks, and your own voice asks for the phone back.",
+         {"child_state": "head_up", "red_bubbles": ["Give me my phone."]}),
+    ]),
+    _short_fallback("If The Wall Knocks Back At Night", "never knock twice", [
+        ("SPLIT_WALL_TWO_BEDS", "knock", "You tap your bedroom wall once, and something taps back from the empty room.", {}),
+        ("BED_CLOSEUP_LISTEN", "ambience", "Nobody has slept in that room since your brother moved out.", {"sub_text": "-TAP. TAP.-"}),
+        ("RULE_CARD", "sub_drop", "Rule one. Never knock a second time.", {"rule": 1, "title": "NEVER KNOCK TWICE"}),
+        ("BEDROOM_WIDE", "heartbeat", "If you answer again, it learns exactly where your pillow is.", {"child_state": "under_blanket"}),
+        ("BEDROOM_WIDE", "whisper", "The next knock will not come from the wall. It comes from your door.",
+         {"child_state": "head_up", "red_bubbles": ["Found you."]}),
+    ]),
+    _short_fallback("If Footsteps Stop Before The Top Stair", "do not count out loud", [
+        ("STAIRS_SCENE", "footsteps", "Every night you hear someone climb the stairs, and stop one step before the top.",
+         {"bubble": "Twelve...", "is_entity": True}),
+        ("BEDROOM_WIDE", "clock_tick", "Your staircase has thirteen steps. You have counted them a hundred times.", {"child_state": "head_up"}),
+        ("RULE_CARD", "sub_drop", "Rule one. Never say thirteen.", {"rule": 1, "title": "NEVER SAY THIRTEEN"}),
+        ("DOOR_GAP_CLOSEUP", "heartbeat", "Tonight the steps did not stop. Two shadows are waiting under your door.", {"sliding": False}),
+        ("BEDROOM_WIDE", "whisper", "And a quiet voice asks you to finish counting.",
+         {"child_state": "under_blanket", "red_bubbles": ["What comes next?"]}),
+    ]),
+]
+
+SHORT_SYSTEM_PROMPT = SYSTEM_STORY_PROMPT.split("CRITICAL VISUAL RULES:")[0] + """THIS IS A YOUTUBE SHORT. These limits replace any length mentioned above:
+- Exactly 5 to 7 scenes. All narration together must be 70 to 115 words (under 55 seconds).
+- Hook the viewer in the first sentence, give only 1 or 2 rules, end with a twist.
+- "title" must end with " #shorts". Set "dur": 3.0 on every scene.
+CRITICAL VISUAL RULES:""" + SYSTEM_STORY_PROMPT.split("CRITICAL VISUAL RULES:")[1].split("- Generate between")[0] + "- Every scene" + \
+    SYSTEM_STORY_PROMPT.split("- Every scene", 1)[1].split("- Progressively cover")[0] + \
+    '- "sfx" must be one of: "ambience", "footsteps", "knock", "whisper", "lock_click", "heartbeat", "phone_buzz", "riser", "sub_drop", "clock_tick".'
+
+
+def _valid_short(data: Any) -> bool:
+    try:
+        scenes = data["scenes"]
+        words = sum(len(str(sc["narration"]).split()) for sc in scenes)
+        return bool(data["title"]) and 4 <= len(scenes) <= 8 and 50 <= words <= 125
+    except (KeyError, TypeError):
+        return False
+
+
+def generate_short_story(long_title: str) -> Dict[str, Any]:
+    premise = random.choice(SHORT_PREMISES)
+    user_prompt = (
+        f"Write a YouTube Short based on this premise: {premise}.\n"
+        f"It must be a completely different story from the long video titled '{long_title}'. "
+        "Do not reuse its situation, rules or ending. Output ONLY valid JSON."
+    )
+    for key_name in ["GEMINI_KEY_1", "GEMINI_KEY_2", "GEMINI_API_KEY", "GROQ_KEY_1", "GROQ_KEY_2", "GROQ_API_KEY"]:
+        api_key = os.environ.get(key_name, "").strip()
+        if not api_key:
+            continue
+        try:
+            if key_name.startswith("GEMINI"):
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+                payload = {
+                    "systemInstruction": {"parts": [{"text": SHORT_SYSTEM_PROMPT}]},
+                    "contents": [{"parts": [{"text": user_prompt}]}],
+                    "generationConfig": {"temperature": 0.9, "responseMimeType": "application/json"},
+                }
+                r = requests.post(url, json=payload, timeout=90)
+                r.raise_for_status()
+                txt = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+            else:
+                payload = {
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": [{"role": "system", "content": SHORT_SYSTEM_PROMPT},
+                                 {"role": "user", "content": user_prompt}],
+                    "temperature": 0.85,
+                    "response_format": {"type": "json_object"},
+                }
+                r = requests.post("https://api.groq.com/openai/v1/chat/completions",
+                                  headers={"Authorization": f"Bearer {api_key}"}, json=payload, timeout=90)
+                r.raise_for_status()
+                txt = r.json()["choices"][0]["message"]["content"]
+            data = json.loads(txt.strip())
+            if _valid_short(data):
+                print(f"[SHORT STORY] Generated: '{data['title']}'")
+                return data
+            print(f"[SHORT STORY] {key_name} returned a script outside the Short limits, trying next.")
+        except Exception as e:
+            print(f"[SHORT STORY] {key_name} warning: {type(e).__name__}")
+    print("[SHORT STORY] Using a built-in Short script.")
+    return random.choice(SHORT_FALLBACKS)
+
+
+# ==============================================================================
 # 2. TRUE SVG ANIMATION RIGS (CONTINUOUS CHARACTER & PROP MOTION)
 # ==============================================================================
 SVG_DEFS = """
@@ -423,12 +541,13 @@ def is_blinking(t_sec: float, seed: float = 0.0) -> bool:
     return 2.55 <= cycle <= 2.70
 
 
-def svg_hood(px: float, py: float, s: float) -> str:
-    """Pointed hood + soft face disc: the protagonist's signature silhouette."""
+def svg_kid_head(px: float, py: float, s: float) -> str:
+    """Big round head with a spiky grey fringe: the protagonist's signature look."""
     return f"""
-      <path d="M {px - 39*s:.1f},{py - 4*s:.1f} Q {px - 24*s:.1f},{py - 40*s:.1f} {px - 4*s:.1f},{py - 74*s:.1f} Q {px + 26*s:.1f},{py - 42*s:.1f} {px + 39*s:.1f},{py - 4*s:.1f} Z" fill="#F5F5F7"/>
-      <ellipse cx="{px:.1f}" cy="{py:.1f}" rx="{40*s:.1f}" ry="{40*s:.1f}" fill="#F5F5F7"/>
-      <ellipse cx="{px:.1f}" cy="{py + 2*s:.1f}" rx="{30*s:.1f}" ry="{29*s:.1f}" fill="#D3D4D2"/>
+      <circle cx="{px:.1f}" cy="{py:.1f}" r="{40*s:.1f}" fill="#F7F7F9"/>
+      <path d="M {px - 39*s:.1f},{py - 9*s:.1f} C {px - 36*s:.1f},{py - 50*s:.1f} {px + 32*s:.1f},{py - 54*s:.1f} {px + 39*s:.1f},{py - 12*s:.1f}
+               L {px + 24*s:.1f},{py - 23*s:.1f} L {px + 14*s:.1f},{py - 15*s:.1f} L {px + 2*s:.1f},{py - 26*s:.1f} L {px - 11*s:.1f},{py - 18*s:.1f} L {px - 22*s:.1f},{py - 24*s:.1f} Z" fill="#B9BAC2"/>
+      <path d="M {px - 4*s:.1f},{py - 42*s:.1f} L {px + 2*s:.1f},{py - 57*s:.1f} L {px + 8*s:.1f},{py - 44*s:.1f} L {px + 19*s:.1f},{py - 53*s:.1f} L {px + 20*s:.1f},{py - 38*s:.1f} Z" fill="#B9BAC2"/>
     """
 
 
@@ -525,7 +644,10 @@ def svg_protagonist_standing(
       {legs_arms}
       <path d="{torso_path}" fill="#F5F5F7"/>
       <rect x="{px - 8*s:.1f}" y="{neck_y - 10*s:.1f}" width="{16*s:.1f}" height="{14*s:.1f}" rx="{5*s:.1f}" fill="#F5F5F7"/>
-      {svg_hood(px, head_y, s)}
+      <path d="M {px - 12*s:.1f},{neck_y + 2*s:.1f} L {px:.1f},{neck_y + 20*s:.1f} L {px + 12*s:.1f},{neck_y + 2*s:.1f}" fill="none" stroke="#A9AAB4" stroke-width="{3*s:.1f}" stroke-linecap="round"/>
+      <circle cx="{px:.1f}" cy="{neck_y + 32*s:.1f}" r="{2.8*s:.1f}" fill="#A9AAB4"/>
+      <circle cx="{px:.1f}" cy="{neck_y + 47*s:.1f}" r="{2.8*s:.1f}" fill="#A9AAB4"/>
+      {svg_kid_head(px, head_y, s)}
       {eyes_svg}
       {brows_mouth}
     </g>
@@ -576,7 +698,7 @@ def svg_head_in_bed(
 
     return f"""
     <g>
-      {svg_hood(px, py, s * 0.94)}
+      {svg_kid_head(px, py, s * 0.94)}
       {eyes}
       <path d="M {px - 16*s + ex_off:.1f},{py - 11*s:.1f} Q {px - 10*s + ex_off:.1f},{py - 15*s:.1f} {px - 4*s + ex_off:.1f},{py - 12*s:.1f}" fill="none" stroke="#0B0B0E" stroke-width="2.4" stroke-linecap="round"/>
       <path d="M {px + 4*s + ex_off:.1f},{py - 12*s:.1f} Q {px + 10*s + ex_off:.1f},{py - 15*s:.1f} {px + 16*s + ex_off:.1f},{py - 11*s:.1f}" fill="none" stroke="#0B0B0E" stroke-width="2.4" stroke-linecap="round"/>
@@ -625,6 +747,9 @@ def svg_parent_or_entity(
     <path d="{dress_path}" fill="#F5F5F7"/>
     """
 
+    if mode == "normal":
+        base_parts += f"""<path d="M {px - 13*s:.1f},{shoulder_y + 2*s:.1f} L {px:.1f},{shoulder_y + 30*s:.1f} L {px + 13*s:.1f},{shoulder_y + 2*s:.1f} M {px:.1f},{shoulder_y + 30*s:.1f} L {px:.1f},{waist_y:.1f}" fill="none" stroke="#A9AAB4" stroke-width="{3*s:.1f}" stroke-linecap="round"/>"""
+
     if waving:
         wave_dx = math.sin(t_sec * 6.0) * 16.0 * s
         wave_dy = math.cos(t_sec * 6.0) * 6.0 * s
@@ -667,9 +792,9 @@ def svg_parent_or_entity(
         )
         head_group = f"""
         <g transform="rotate({tilt:.1f} {px:.1f} {head_y:.1f})">
-          <circle cx="{px:.1f}" cy="{head_y - 34*s:.1f}" r="{15*s:.1f}" fill="#D8D8DE"/>
-          <ellipse cx="{px:.1f}" cy="{head_y:.1f}" rx="{31*s:.1f}" ry="{34*s:.1f}" fill="#F5F5F7"/>
-          <path d="M {px - 31*s:.1f},{head_y - 6*s:.1f} Q {px:.1f},{head_y - 36*s:.1f} {px + 31*s:.1f},{head_y - 6*s:.1f}" fill="none" stroke="#E2E2E8" stroke-width="{4*s:.1f}"/>
+          <path d="M {px - 44*s:.1f},{head_y + 24*s:.1f} C {px - 50*s:.1f},{head_y - 58*s:.1f} {px + 50*s:.1f},{head_y - 58*s:.1f} {px + 44*s:.1f},{head_y + 24*s:.1f} L {px + 28*s:.1f},{head_y + 18*s:.1f} L {px - 28*s:.1f},{head_y + 18*s:.1f} Z" fill="#A9AAB4"/>
+          <circle cx="{px:.1f}" cy="{head_y:.1f}" r="{34*s:.1f}" fill="#F7F7F9"/>
+          <path d="M {px - 34*s:.1f},{head_y - 7*s:.1f} C {px - 30*s:.1f},{head_y - 44*s:.1f} {px + 30*s:.1f},{head_y - 44*s:.1f} {px + 34*s:.1f},{head_y - 7*s:.1f} Q {px + 6*s:.1f},{head_y - 10*s:.1f} {px - 6*s:.1f},{head_y - 28*s:.1f} Q {px - 16*s:.1f},{head_y - 11*s:.1f} {px - 34*s:.1f},{head_y - 7*s:.1f} Z" fill="#A9AAB4"/>
           {eye_el}
           <path d="M {px - 9*s:.1f},{head_y + 10*s:.1f} Q {px:.1f},{head_y + 18*s:.1f} {px + 9*s:.1f},{head_y + 10*s:.1f}" fill="none" stroke="#0B0B0E" stroke-width="{2.6*s:.1f}" stroke-linecap="round"/>
         </g>
@@ -677,7 +802,7 @@ def svg_parent_or_entity(
     elif mode == "dark_head":
         head_group = f"""
         <g transform="rotate({tilt:.1f} {px:.1f} {head_y:.1f})">
-          <circle cx="{px:.1f}" cy="{head_y - 34*s:.1f}" r="{14*s:.1f}" fill="#141418" stroke="#3A3A44" stroke-width="1.5"/>
+          <path d="M {px - 44*s:.1f},{head_y + 24*s:.1f} C {px - 50*s:.1f},{head_y - 58*s:.1f} {px + 50*s:.1f},{head_y - 58*s:.1f} {px + 44*s:.1f},{head_y + 24*s:.1f} L {px + 28*s:.1f},{head_y + 18*s:.1f} L {px - 28*s:.1f},{head_y + 18*s:.1f} Z" fill="#141418" stroke="#4A4A55" stroke-width="1.5"/>
           <ellipse cx="{px:.1f}" cy="{head_y:.1f}" rx="{31*s:.1f}" ry="{34*s:.1f}" fill="#0C0C10" stroke="#454552" stroke-width="2"/>
         </g>
         """
@@ -689,7 +814,7 @@ def svg_parent_or_entity(
             teeth_lines += f'<line x1="{px + tx*s:.1f}" y1="{head_y + 8*s:.1f}" x2="{px + tx*s:.1f}" y2="{head_y + 21*s:.1f}" stroke="#111115" stroke-width="{1.6*s:.1f}"/>'
         head_group = f"""
         <g transform="rotate({tilt:.1f} {px:.1f} {head_y:.1f})">
-          <circle cx="{px + 5*s:.1f}" cy="{head_y - 34*s:.1f}" r="{14*s:.1f}" fill="#141418" stroke="#4A4A55" stroke-width="1.5"/>
+          <path d="M {px - 44*s:.1f},{head_y + 24*s:.1f} C {px - 50*s:.1f},{head_y - 58*s:.1f} {px + 50*s:.1f},{head_y - 58*s:.1f} {px + 44*s:.1f},{head_y + 24*s:.1f} L {px + 28*s:.1f},{head_y + 18*s:.1f} L {px - 28*s:.1f},{head_y + 18*s:.1f} Z" fill="#141418" stroke="#4A4A55" stroke-width="1.5"/>
           <ellipse cx="{px:.1f}" cy="{head_y:.1f}" rx="{32*s:.1f}" ry="{35*s:.1f}" fill="#0D0D12" stroke="#D8D8E0" stroke-width="2.2"/>
           <ellipse cx="{px - 11*s:.1f}" cy="{head_y - 5*s:.1f}" rx="{eye_rx:.1f}" ry="{5.0*s:.1f}" fill="#FFE600" filter="url(#eyeGlow)"/>
           <ellipse cx="{px + 11*s:.1f}" cy="{head_y - 5*s:.1f}" rx="{eye_rx:.1f}" ry="{5.0*s:.1f}" fill="#FFE600" filter="url(#eyeGlow)"/>
@@ -805,11 +930,11 @@ def svg_bed(bed_x: float, floor_y: float, child_state: str = "head_up", t_sec: f
     head_svg = ""
     if child_state in ("lying", "head_up"):
         # Head sits cleanly ON the pillow (pillow top is floor_y - 122)
-        head_y = (floor_y - 134) if child_state == "head_up" else (floor_y - 126)
+        head_y = (floor_y - 154) if child_state == "head_up" else (floor_y - 142)
         head_svg = svg_head_in_bed(
-            bed_x + 92,
+            bed_x + 96,
             head_y,
-            scale=0.92,
+            scale=1.18,
             scared=(child_state == "head_up"),
             facing=1,
             t_sec=t_sec,
@@ -836,7 +961,62 @@ def svg_bed(bed_x: float, floor_y: float, child_state: str = "head_up", t_sec: f
     """
 
 
-def build_scene_svg(scene: Dict[str, Any], t_sec: float, dur: float = 7.0) -> str:
+def portrait_view(stype: str, params: Dict[str, Any], prog: float) -> Tuple[float, float]:
+    """Returns (focus center x, visible width) on the 1920px stage for the 9:16 Short."""
+    def pan(a: float, b: float) -> float:
+        return a + (b - a) * smoothstep(0.30, 0.75, prog)
+
+    mode = params.get("mode", "")
+    if stype == "BEDROOM_WIDE":
+        if params.get("white_bubble") or params.get("door_open_entity") \
+                or str(params.get("child_state", "")).startswith("standing"):
+            return 1370.0, 880.0
+        if params.get("red_bubbles"):
+            return pan(760.0, 1330.0), 900.0
+        if params.get("red_x_window"):
+            return pan(720.0, 1040.0), 880.0
+        return 720.0 + prog * 90, 880.0
+    if stype == "HALLWAY_3_DOORS":
+        if mode == "empty":
+            return pan(640.0, 1280.0), 900.0
+        if mode in ("normal_parent", "white_mom"):
+            return 1130.0, 900.0
+        if "yellow" in mode:
+            return 960.0, 900.0
+        return 680.0, 900.0
+    if stype == "HALLWAY_2_DOORS":
+        return 760.0 + prog * 360, 900.0
+    if stype in ("DUAL_COMPARISON", "DUAL_MOM_COMPARISON"):
+        return pan(520.0, 1400.0), 760.0
+    if stype == "SPLIT_WALL_TWO_BEDS":
+        return pan(470.0, 1420.0), 820.0
+    return {
+        "STAIRS_SCENE": (880.0, 1000.0),
+        "STAIRS_GOODNIGHT": (880.0, 1150.0),
+        "BED_CLOSEUP_LISTEN": (900.0, 1100.0),
+        "BEDROOM_EMPTY_NIGHTSTAND": (900.0, 1000.0),
+        "DOOR_GAP_CLOSEUP": (960.0, 1500.0),
+        "DOOR_LOCK_CLOSEUP": (1010.0, 820.0),
+        "PHONE_SCREEN": (960.0, 880.0),
+        "SPLIT_DOOR_CUTAWAY": (940.0, 1120.0),
+        "FLASHBACK_TABLE": (920.0, 1120.0),
+    }.get(stype, (960.0, 1200.0))
+
+
+def portrait_rule_card(params: Dict[str, Any], t_sec: float) -> str:
+    rnum = int(params.get("rule", 1))
+    lines = textwrap.wrap(str(params.get("title", "FOLLOW THE RULE")), width=17)
+    left = max(0, int((t_sec - 0.2) * 32))
+    body = '<rect x="390" y="560" width="300" height="86" rx="10" fill="#0D0D12" stroke="#FFFFFF" stroke-width="4"/>'
+    body += f'<text x="540" y="620" fill="#FFFFFF" font-family="DejaVu Sans Mono, monospace" font-size="48" font-weight="bold" text-anchor="middle">RULE {rnum}</text>'
+    for i, line in enumerate(lines[:4]):
+        shown = xml_escape(line[:left])
+        left = max(0, left - len(line))
+        body += f'<text x="540" y="{790 + i * 96}" fill="#FFFFFF" font-family="DejaVu Sans, Arial, sans-serif" font-size="72" font-weight="bold" text-anchor="middle">{shown}</text>'
+    return f'<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920"><rect width="1080" height="1920" fill="#000000"/>{body}</svg>'
+
+
+def build_scene_svg(scene: Dict[str, Any], t_sec: float, dur: float = 7.0, portrait: bool = False) -> str:
     """Builds the 1920x1080 SVG with continuous 2D animation + smooth camera motion."""
     stype = scene.get("type", "BEDROOM_WIDE")
     params = scene.get("params", {})
@@ -871,7 +1051,7 @@ def build_scene_svg(scene: Dict[str, Any], t_sec: float, dur: float = 7.0) -> st
         mode = params.get("mode", "empty")
         if mode in ("normal_parent", "white_mom"):
             walk_x = 1220 - prog * 180
-            body += svg_parent_or_entity(walk_x, FLOOR_Y, scale=0.88, mode="normal", waving=False, t_sec=t_sec, walking=True)
+            body += svg_parent_or_entity(walk_x, FLOOR_Y, scale=1.04, mode="normal", waving=False, t_sec=t_sec, walking=True)
         elif mode in ("dark_entity_left", "dark_head_mom_left"):
             walk_x = 460 + prog * 95
             body += svg_parent_or_entity(walk_x, FLOOR_Y, scale=0.88, mode="dark_head", t_sec=t_sec, walking=True)
@@ -981,7 +1161,7 @@ def build_scene_svg(scene: Dict[str, Any], t_sec: float, dur: float = 7.0) -> st
             body += svg_parent_or_entity(dx + 96, FLOOR_Y, scale=0.88, mode="normal", waving=True, t_sec=t_sec)
 
         if cstate in ("standing_door", "standing_door_sad"):
-            body += svg_protagonist_standing(dx - 95, FLOOR_Y, scale=0.92, scared=(cstate == "standing_door"), sad=(cstate == "standing_door_sad"), facing=1, t_sec=t_sec)
+            body += svg_protagonist_standing(dx - 95, FLOOR_Y, scale=1.2, scared=(cstate == "standing_door"), sad=(cstate == "standing_door_sad"), facing=1, t_sec=t_sec)
 
         if params.get("has_dog"):
             body += svg_dog_silhouette(1180, FLOOR_Y, scale=0.88, t_sec=t_sec)
@@ -1097,7 +1277,7 @@ def build_scene_svg(scene: Dict[str, Any], t_sec: float, dur: float = 7.0) -> st
             body += svg_bed(wx + 220, FLOOR_Y, child_state="under_blanket", t_sec=t_sec)
         else:
             body += svg_parent_or_entity(wx - 135, FLOOR_Y, scale=1.08, mode="creepy_smile", head_tilt_deg=14.0, t_sec=t_sec)
-            body += svg_protagonist_standing(wx + 125, FLOOR_Y, scale=0.98, scared=True, facing=-1, t_sec=t_sec)
+            body += svg_protagonist_standing(wx + 125, FLOOR_Y, scale=1.2, scared=True, facing=-1, t_sec=t_sec)
 
     elif stype == "DOOR_LOCK_CLOSEUP":
         # Animated deadbolt rotation from -32 deg (unlocked) to 0 deg (locked)
@@ -1170,8 +1350,18 @@ def build_scene_svg(scene: Dict[str, Any], t_sec: float, dur: float = 7.0) -> st
         <rect x="1200" y="{FLOOR_Y - 133}" width="22" height="133" fill="#63432B"/>
         """
         body += svg_parent_or_entity(530, FLOOR_Y, scale=0.95, mode="normal", waving=True, t_sec=t_sec)
-        body += svg_protagonist_standing(1360, FLOOR_Y, scale=0.86, scared=False, facing=-1, t_sec=t_sec)
+        body += svg_protagonist_standing(1360, FLOOR_Y, scale=1.1, scared=False, facing=-1, t_sec=t_sec)
         body += svg_speech_bubble(680, 390, params.get("bubble", "You were talking in your sleep!"), is_red=False, tail_dir="down_left", t_sec=t_sec)
+
+    if portrait:
+        if stype == "RULE_CARD":
+            return portrait_rule_card(params, t_sec)
+        cx, view_w = portrait_view(stype, params, prog)
+        scale = (1080.0 / view_w) * (1.0 + prog * 0.04)
+        closeup = stype in ("PHONE_SCREEN", "DOOR_GAP_CLOSEUP", "DOOR_LOCK_CLOSEUP")
+        ty = 900.0 - H / 2.0 * scale if closeup else 1260.0 - FLOOR_Y * scale
+        stage = f'<g transform="translate({540.0 - cx * scale:.2f} {ty:.2f}) scale({scale:.4f})">{body}</g>'
+        return f'<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920"><rect width="1080" height="1920" fill="#000000"/>{SVG_DEFS}{stage}</svg>'
 
     # Smooth Cinematic Camera Push-In / Pan Transform across the scene
     framing = {
@@ -1204,6 +1394,13 @@ def add_hud_and_captions(
     global_t: float,
 ) -> Image.Image:
     draw = ImageDraw.Draw(img)
+    if img.height > img.width:  # 9:16 Short: big wrapped captions inside the safe area
+        f_cap = get_font(62)
+        draw.text((60, 150), f"{HUD_PREFIX}   |   {hud_state}", fill=(205, 205, 215), font=get_font(28, mono=True))
+        for i, line in enumerate(textwrap.wrap(caption_line.upper(), width=24)):
+            draw.text((img.width // 2, 1450 + i * 82), line, fill=(255, 255, 255), font=f_cap,
+                      anchor="mm", stroke_width=4, stroke_fill=(0, 0, 0))
+        return img
     f_hud = get_font(26, mono=True)
     f_cap = get_font(42, mono=False)
 
@@ -1231,16 +1428,17 @@ def add_hud_and_captions(
     return img
 
 
-def render_svg_to_pil(svg_str: str) -> Image.Image:
+def render_svg_to_pil(svg_str: str, size: Tuple[int, int] = (W, H)) -> Image.Image:
     if HAS_CAIRO:
-        png_bytes = cairosvg.svg2png(bytestring=svg_str.encode("utf-8"), output_width=W, output_height=H)
+        png_bytes = cairosvg.svg2png(bytestring=svg_str.encode("utf-8"), output_width=size[0], output_height=size[1])
         return add_glow(Image.open(BytesIO(png_bytes)).convert("RGB"))
-    return Image.new("RGB", (W, H), (0, 0, 0))
+    return Image.new("RGB", size, (0, 0, 0))
 
 
 def add_glow(img: Image.Image) -> Image.Image:
     """Soft bloom around bright shapes (blurred at quarter size to stay fast)."""
-    halo = img.resize((W // 4, H // 4)).filter(ImageFilter.GaussianBlur(4)).resize((W, H))
+    small = img.resize((img.width // 4, img.height // 4))
+    halo = small.filter(ImageFilter.GaussianBlur(4)).resize(img.size)
     return ImageChops.screen(img, halo.point(lambda v: int(v * 0.35)))
 
 
@@ -1251,8 +1449,8 @@ def add_glitch(img: Image.Image, seed: int) -> Image.Image:
     shift = rng.randint(9, 26)
     out = Image.merge("RGB", (ImageChops.offset(r, shift, 0), g, ImageChops.offset(b, -shift, 0)))
     for _ in range(9):
-        y = rng.randint(0, H - 50)
-        band = out.crop((0, y, W, y + rng.randint(6, 36)))
+        y = rng.randint(0, img.height - 50)
+        band = out.crop((0, y, img.width, y + rng.randint(6, 36)))
         out.paste(ImageChops.offset(band, rng.randint(-90, 90), 0), (0, y))
     return out
 
@@ -1597,19 +1795,10 @@ def split_caption_chunks(narration: str) -> List[str]:
     return chunks
 
 
-def render_full_video():
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    if WORK_DIR.exists():
-        shutil.rmtree(WORK_DIR)
-    if AUDIO_DIR.exists():
-        shutil.rmtree(AUDIO_DIR)
-    WORK_DIR.mkdir(parents=True, exist_ok=True)
-    AUDIO_DIR.mkdir(parents=True, exist_ok=True)
-
-    story = generate_original_story()
-    scenes = story["scenes"]
-
+def render_video(scenes: List[Dict[str, Any]], out_mp4: Path, tag: str, portrait: bool) -> Tuple[float, str]:
+    """Voices, animates and joins one set of scenes into a 16:9 or 9:16 video."""
     voice_data = synthesize_all_scenes_voice(scenes)
+    size = (1080, 1920) if portrait else (W, H)
 
     clip_paths: List[Path] = []
     global_t = 0.0
@@ -1617,8 +1806,8 @@ def render_full_video():
 
     for idx, sc in enumerate(scenes):
         vo_wav, dur, _ = voice_data[idx]
-        sfx_wav = AUDIO_DIR / f"sfx_{idx:03d}.wav"
-        mix_wav = AUDIO_DIR / f"mix_{idx:03d}.wav"
+        sfx_wav = AUDIO_DIR / f"{tag}_sfx_{idx:03d}.wav"
+        mix_wav = AUDIO_DIR / f"{tag}_mix_{idx:03d}.wav"
         build_scene_sfx(sc.get("sfx", "ambience"), dur, sfx_wav)
 
         subprocess.run(
@@ -1637,14 +1826,14 @@ def render_full_video():
         # Render at ANIM_FPS (10 FPS) for smooth character & prop movement
         n_steps = max(1, int(math.ceil(dur * ANIM_FPS)))
         chunks = split_caption_chunks(sc.get("narration", ""))
-        scene_frame_dir = WORK_DIR / f"sc_{idx:03d}"
+        scene_frame_dir = WORK_DIR / f"{tag}_sc_{idx:03d}"
         scene_frame_dir.mkdir(parents=True, exist_ok=True)
 
         for step in range(n_steps):
             local_t = step / float(ANIM_FPS)
             c_idx = min(len(chunks) - 1, int((local_t / max(dur, 0.01)) * len(chunks)))
-            svg_doc = build_scene_svg(sc, local_t, dur=dur)
-            pil_img = render_svg_to_pil(svg_doc)
+            svg_doc = build_scene_svg(sc, local_t, dur=dur, portrait=portrait)
+            pil_img = render_svg_to_pil(svg_doc, size)
             pil_img = add_hud_and_captions(
                 pil_img,
                 sc.get("hud", "NORMAL"),
@@ -1657,7 +1846,7 @@ def render_full_video():
                 pil_img = add_glitch(pil_img, idx * 1000 + step)
             pil_img.save(str(scene_frame_dir / f"f_{step:04d}.jpg"), quality=92)
 
-        clip_mp4 = WORK_DIR / f"clip_{idx:03d}.mp4"
+        clip_mp4 = WORK_DIR / f"{tag}_clip_{idx:03d}.mp4"
         subprocess.run(
             [
                 "ffmpeg", "-y",
@@ -1679,38 +1868,44 @@ def render_full_video():
         global_t += dur
         shutil.rmtree(scene_frame_dir, ignore_errors=True)
 
-    concat_txt = WORK_DIR / "concat.txt"
+    concat_txt = WORK_DIR / f"{tag}_concat.txt"
     concat_txt.write_text("\n".join(f"file '{c.resolve()}'" for c in clip_paths), encoding="utf-8")
 
-    long_mp4 = OUTPUT_DIR / "long_video_16x9.mp4"
     subprocess.run(
         [
             "ffmpeg", "-y", "-f", "concat", "-safe", "0",
             "-i", str(concat_txt),
-            "-c", "copy", str(long_mp4)
+            "-c", "copy", str(out_mp4)
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         check=True,
     )
+    return global_t, used_voice_engine
+
+
+def render_full_video():
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    if WORK_DIR.exists():
+        shutil.rmtree(WORK_DIR)
+    if AUDIO_DIR.exists():
+        shutil.rmtree(AUDIO_DIR)
+    WORK_DIR.mkdir(parents=True, exist_ok=True)
+    AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+
+    story = generate_original_story()
+    scenes = story["scenes"]
+
+    long_mp4 = OUTPUT_DIR / "long_video_16x9.mp4"
+    global_t, used_voice_engine = render_video(scenes, long_mp4, "long", portrait=False)
     print(f"[VIDEO] Saved 16:9 Long Video ({global_t:.1f}s) -> {long_mp4}")
 
-    short_mp4 = OUTPUT_DIR / "viral_short_9x16.mp4"
-    short_dur = min(56.0, global_t)
-    subprocess.run(
-        [
-            "ffmpeg", "-y", "-i", str(long_mp4),
-            "-t", f"{short_dur:.2f}",
-            "-vf", "crop=608:1080:656:0,scale=1080:1920",
-            "-c:v", "libx264", "-preset", "fast", "-crf", "19",
-            "-c:a", "aac", "-b:a", "192k",
-            str(short_mp4)
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=True,
-    )
-    print(f"[SHORT] Saved 9:16 Viral Short ({short_dur:.1f}s) -> {short_mp4}")
+    short_story = generate_short_story(story.get("title", ""))
+    short_mp4 = OUTPUT_DIR / "short_video_9x16.mp4"
+    short_t, _ = render_video(short_story["scenes"], short_mp4, "short", portrait=True)
+    print(f"[SHORT] Saved 9:16 Short with its own script ({short_t:.1f}s) -> {short_mp4}")
+    if short_t > 60:
+        print("[SHORT] WARNING: Short is longer than 60 seconds.")
 
     thumb_jpg = OUTPUT_DIR / "thumbnail_16x9.jpg"
     generate_custom_thumbnail(story, thumb_jpg)
@@ -1732,7 +1927,9 @@ def render_full_video():
     pub_txt.write_text(
         f"TITLE:\n{story.get('title')}\n\n"
         f"DESCRIPTION:\n{story.get('description')}\n\n"
-        f"TAGS:\n{', '.join(story.get('tags', []))}\n",
+        f"TAGS:\n{', '.join(story.get('tags', []))}\n\n"
+        f"SHORT TITLE:\n{short_story.get('title')}\n\n"
+        f"SHORT DESCRIPTION:\n{short_story.get('description', '')}\n",
         encoding="utf-8",
     )
 
@@ -1749,7 +1946,8 @@ def render_full_video():
                 "total_duration_seconds": round(global_t, 2),
                 "outputs": {
                     "long_video_16x9": str(long_mp4),
-                    "viral_short_9x16": str(short_mp4),
+                    "short_video_9x16": str(short_mp4),
+                    "short_title": short_story.get("title"),
                     "thumbnail_16x9": str(thumb_jpg),
                     "contact_sheet": str(contact_jpg),
                 },
