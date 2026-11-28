@@ -19,6 +19,7 @@ import wave
 import base64
 import random
 import shutil
+import textwrap
 import asyncio
 import subprocess
 from io import BytesIO
@@ -27,7 +28,7 @@ from typing import List, Dict, Any, Optional, Tuple
 
 import numpy as np
 import requests
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 # Ensure cairosvg is installed for true Cubic-Bezier SVG vector rendering
 try:
@@ -422,6 +423,15 @@ def is_blinking(t_sec: float, seed: float = 0.0) -> bool:
     return 2.55 <= cycle <= 2.70
 
 
+def svg_hood(px: float, py: float, s: float) -> str:
+    """Pointed hood + soft face disc: the protagonist's signature silhouette."""
+    return f"""
+      <path d="M {px - 39*s:.1f},{py - 4*s:.1f} Q {px - 24*s:.1f},{py - 40*s:.1f} {px - 4*s:.1f},{py - 74*s:.1f} Q {px + 26*s:.1f},{py - 42*s:.1f} {px + 39*s:.1f},{py - 4*s:.1f} Z" fill="#F5F5F7"/>
+      <ellipse cx="{px:.1f}" cy="{py:.1f}" rx="{40*s:.1f}" ry="{40*s:.1f}" fill="#F5F5F7"/>
+      <ellipse cx="{px:.1f}" cy="{py + 2*s:.1f}" rx="{30*s:.1f}" ry="{29*s:.1f}" fill="#D3D4D2"/>
+    """
+
+
 def svg_protagonist_standing(
     cx: float,
     floor_y: float,
@@ -443,7 +453,6 @@ def svg_protagonist_standing(
     head_y = floor_y - 168 * s + breath - walk_bob
     neck_y = floor_y - 128 * s + breath - walk_bob
     hip_y = floor_y - 58 * s - walk_bob * 0.5
-    rx, ry = 34 * s, 36 * s
 
     torso_path = (
         f"M {px - 28*s:.1f},{neck_y:.1f} "
@@ -516,7 +525,7 @@ def svg_protagonist_standing(
       {legs_arms}
       <path d="{torso_path}" fill="#F5F5F7"/>
       <rect x="{px - 8*s:.1f}" y="{neck_y - 10*s:.1f}" width="{16*s:.1f}" height="{14*s:.1f}" rx="{5*s:.1f}" fill="#F5F5F7"/>
-      <ellipse cx="{px:.1f}" cy="{head_y:.1f}" rx="{rx:.1f}" ry="{ry:.1f}" fill="#F5F5F7"/>
+      {svg_hood(px, head_y, s)}
       {eyes_svg}
       {brows_mouth}
     </g>
@@ -537,7 +546,6 @@ def svg_head_in_bed(
     breath_y = math.sin(t_sec * 3.0) * 1.8 * s
     px = cx + shiver_x
     py = cy + breath_y
-    rx, ry = 32 * s, 34 * s
 
     dart_x = math.sin(t_sec * 2.4) * 3.0 * s
     ex_off = 5 * s * facing + dart_x
@@ -568,7 +576,7 @@ def svg_head_in_bed(
 
     return f"""
     <g>
-      <ellipse cx="{px:.1f}" cy="{py:.1f}" rx="{rx:.1f}" ry="{ry:.1f}" fill="#F5F5F7"/>
+      {svg_hood(px, py, s * 0.94)}
       {eyes}
       <path d="M {px - 16*s + ex_off:.1f},{py - 11*s:.1f} Q {px - 10*s + ex_off:.1f},{py - 15*s:.1f} {px - 4*s + ex_off:.1f},{py - 12*s:.1f}" fill="none" stroke="#0B0B0E" stroke-width="2.4" stroke-linecap="round"/>
       <path d="M {px + 4*s + ex_off:.1f},{py - 12*s:.1f} Q {px + 10*s + ex_off:.1f},{py - 15*s:.1f} {px + 16*s + ex_off:.1f},{py - 11*s:.1f}" fill="none" stroke="#0B0B0E" stroke-width="2.4" stroke-linecap="round"/>
@@ -1021,7 +1029,8 @@ def build_scene_svg(scene: Dict[str, Any], t_sec: float, dur: float = 7.0) -> st
 
     elif stype == "RULE_CARD":
         rnum = int(params.get("rule", 1))
-        rtitle = xml_escape(params.get("title", "FOLLOW THE RULE"))
+        full_title = str(params.get("title", "FOLLOW THE RULE"))
+        rtitle = xml_escape(full_title[: max(0, int((t_sec - 0.2) * 32))])
         pulse_sc = 1.0 + math.sin(t_sec * 6.0) * 0.04
         body += f"""
         <rect x="{W/2 - 115}" y="275" width="230" height="58" rx="8" fill="#0D0D12" stroke="#FFFFFF" stroke-width="3"/>
@@ -1122,7 +1131,12 @@ def build_scene_svg(scene: Dict[str, Any], t_sec: float, dur: float = 7.0) -> st
         buzz_x = (math.sin(t_sec * 38.0) * 3.5) if t_sec < 1.6 else 0.0
         slide_y = (1.0 - smoothstep(0.05, 0.35, prog)) * 45.0
         sender = xml_escape(params.get("sender", "Mom"))
-        msg = xml_escape(params.get("msg", "Are you awake?"))
+        msg_lines = textwrap.wrap(str(params.get("msg", "Are you awake?")), width=23)[:4] or [""]
+        bubble_h = 56 + 38 * len(msg_lines)
+        msg_svg = "".join(
+            f'<text x="{px + 72}" y="{py + 330 + i * 38}" fill="#FFFFFF" font-family="DejaVu Sans, Arial, sans-serif" font-size="27" font-weight="bold">{xml_escape(line)}</text>'
+            for i, line in enumerate(msg_lines)
+        )
         tm = xml_escape(params.get("time", "2:14 AM"))
         body += f"""
         <g transform="translate({buzz_x:.1f} 0)">
@@ -1132,9 +1146,9 @@ def build_scene_svg(scene: Dict[str, Any], t_sec: float, dur: float = 7.0) -> st
           <text x="{px + pw/2}" y="{py + 138}" fill="#FFFFFF" font-family="DejaVu Sans, Arial, sans-serif" font-size="32" font-weight="bold" text-anchor="middle">{sender[:1]}</text>
           <text x="{px + pw/2}" y="{py + 205}" fill="#FFFFFF" font-family="DejaVu Sans, Arial, sans-serif" font-size="28" font-weight="bold" text-anchor="middle">{sender}</text>
           <g transform="translate(0 {slide_y:.1f})">
-            <rect x="{px + 42}" y="{py + 275}" width="390" height="92" rx="24" fill="#232630"/>
-            <text x="{px + 72}" y="{py + 330}" fill="#FFFFFF" font-family="DejaVu Sans, Arial, sans-serif" font-size="27" font-weight="bold">{msg}</text>
-            <text x="{px + 52}" y="{py + 402}" fill="#828594" font-family="DejaVu Sans, Arial, sans-serif" font-size="21">{tm} · Delivered</text>
+            <rect x="{px + 42}" y="{py + 275}" width="456" height="{bubble_h}" rx="24" fill="#232630"/>
+            {msg_svg}
+            <text x="{px + 52}" y="{py + 275 + bubble_h + 35}" fill="#828594" font-family="DejaVu Sans, Arial, sans-serif" font-size="21">{tm} · Delivered</text>
           </g>
         </g>
         """
@@ -1160,10 +1174,24 @@ def build_scene_svg(scene: Dict[str, Any], t_sec: float, dur: float = 7.0) -> st
         body += svg_speech_bubble(680, 390, params.get("bubble", "You were talking in your sleep!"), is_red=False, tail_dir="down_left", t_sec=t_sec)
 
     # Smooth Cinematic Camera Push-In / Pan Transform across the scene
-    cam_zoom = 1.0 + prog * 0.055
+    framing = {
+        "BEDROOM_WIDE": 1.12,
+        "HALLWAY_3_DOORS": 1.10,
+        "HALLWAY_2_DOORS": 1.12,
+        "DUAL_COMPARISON": 1.10,
+        "DUAL_MOM_COMPARISON": 1.10,
+        "FLASHBACK_TABLE": 1.25,
+        "SPLIT_WALL_TWO_BEDS": 1.10,
+        "BEDROOM_EMPTY_NIGHTSTAND": 1.20,
+    }.get(stype, 1.0)
+    if params.get("show_bookshelf"):
+        framing = 1.04
+    cam_zoom = framing * (1.0 + prog * 0.055)
     cam_pan_x = math.sin(prog * math.pi) * 14.0
+    # Anchor on the floor line so characters grow upwards and captions stay clear
+    anchor_y = FLOOR_Y if framing > 1.0 else H / 2.0
     tx = (W / 2.0) * (1.0 - cam_zoom) + cam_pan_x
-    ty = (H / 2.0) * (1.0 - cam_zoom)
+    ty = anchor_y * (1.0 - cam_zoom)
     camera_wrapped = f'<g transform="translate({tx:.2f} {ty:.2f}) scale({cam_zoom:.4f})">{body}</g>'
 
     return f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}"><rect width="{W}" height="{H}" fill="#000000"/>{SVG_DEFS}{camera_wrapped}</svg>'
@@ -1190,6 +1218,7 @@ def add_hud_and_captions(
     draw.text((1638, 42), tc, fill=(205, 205, 215), font=f_hud)
 
     if caption_line:
+        draw.rectangle([0, 936, W, H], fill=(0, 0, 0))
         up = caption_line.upper()
         bbox = draw.textbbox((0, 0), up, font=f_cap)
         tw = bbox[2] - bbox[0]
@@ -1205,8 +1234,27 @@ def add_hud_and_captions(
 def render_svg_to_pil(svg_str: str) -> Image.Image:
     if HAS_CAIRO:
         png_bytes = cairosvg.svg2png(bytestring=svg_str.encode("utf-8"), output_width=W, output_height=H)
-        return Image.open(BytesIO(png_bytes)).convert("RGB")
+        return add_glow(Image.open(BytesIO(png_bytes)).convert("RGB"))
     return Image.new("RGB", (W, H), (0, 0, 0))
+
+
+def add_glow(img: Image.Image) -> Image.Image:
+    """Soft bloom around bright shapes (blurred at quarter size to stay fast)."""
+    halo = img.resize((W // 4, H // 4)).filter(ImageFilter.GaussianBlur(4)).resize((W, H))
+    return ImageChops.screen(img, halo.point(lambda v: int(v * 0.35)))
+
+
+def add_glitch(img: Image.Image, seed: int) -> Image.Image:
+    """VHS-style RGB split and sliced horizontal tearing."""
+    rng = random.Random(seed)
+    r, g, b = img.split()
+    shift = rng.randint(9, 26)
+    out = Image.merge("RGB", (ImageChops.offset(r, shift, 0), g, ImageChops.offset(b, -shift, 0)))
+    for _ in range(9):
+        y = rng.randint(0, H - 50)
+        band = out.crop((0, y, W, y + rng.randint(6, 36)))
+        out.paste(ImageChops.offset(band, rng.randint(-90, 90), 0), (0, y))
+    return out
 
 
 # ==============================================================================
@@ -1603,6 +1651,10 @@ def render_full_video():
                 chunks[c_idx],
                 global_t + local_t,
             )
+            # Glitch on the opening frames and whenever a new rule hits
+            new_rule = sc.get("type") == "RULE_CARD" or bool(sc.get("params", {}).get("rule_intro"))
+            if (idx == 0 or new_rule) and local_t < 0.35:
+                pil_img = add_glitch(pil_img, idx * 1000 + step)
             pil_img.save(str(scene_frame_dir / f"f_{step:04d}.jpg"), quality=92)
 
         clip_mp4 = WORK_DIR / f"clip_{idx:03d}.mp4"
